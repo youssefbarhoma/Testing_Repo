@@ -1,0 +1,50 @@
+package com.yourcompany.ats.evaluation.model;
+
+import com.yourcompany.ats.common.converter.MapListJsonConverter;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Entity
+@Table(name = "score_results")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ScoreResult {
+
+    @Id
+    @Column(name = "id", length = 36)
+    private String id;
+
+    @Column(name = "job_opening_id", length = 36, nullable = false)
+    private String jobOpeningId;
+
+    @Column(name = "candidate_id", length = 36, nullable = false)
+    private String candidateId;
+
+    @Column(name = "score", precision = 5, scale = 2, nullable = false)
+    private BigDecimal score;
+
+    @Convert(converter = MapListJsonConverter.class)
+    @Column(name = "matched_items", columnDefinition = "jsonb", nullable = false)
+    private List<Map<String, Object>> matchedItems;
+
+    @Convert(converter = MapListJsonConverter.class)
+    @Column(name = "missing_items", columnDefinition = "jsonb", nullable = false)
+    private List<Map<String, Object>> missingItems;
+
+    @Column(name = "total_experience_years")
+    private Integer totalExperienceYears;
+
+    @Column(name = "relevant_experience_years")
+    private Integer relevantExperienceYears;
+
+    @Column(name = "computed_at", nullable = false)
+    private LocalDateTime computedAt;
+}
