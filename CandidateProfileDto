@@ -1,0 +1,21 @@
+package com.yourcompany.ats.evaluation.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * The single "everything about this candidate for this job" view.
+ * Assembled by CandidateProfileBuilder from 3 separate tables/services
+ * so the controller/frontend only ever deals with one shape.
+ */
+@Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CandidateProfileDTO {
+    private CandidateResponseDTO candidate;
+    private ExtractionResultDTO extraction;   // nullable if extraction not run yet
+    private ScoreResultDTO score;             // nullable if scoring not run yet
+}
