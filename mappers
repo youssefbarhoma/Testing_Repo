@@ -1,0 +1,137 @@
+package com.yourcompany.ats.evaluation.mapper;
+
+import com.yourcompany.ats.evaluation.dto.CandidateResponseDTO;
+import com.yourcompany.ats.evaluation.model.Candidate;
+import org.springframework.stereotype.Component;
+
+@Component
+public class CandidateMapper {
+
+    public CandidateResponseDTO toDto(Candidate entity) {
+        if (entity == null) {
+            return null;
+        }
+        return CandidateResponseDTO.builder()
+                .id(entity.getId())
+                .cvDocumentId(entity.getCvDocumentId())
+                .fullName(entity.getFullName())
+                .email(entity.getEmail())
+                .phoneNumber(entity.getPhoneNumber())
+                .age(entity.getAge())
+                .build();
+    }
+
+    public Candidate toEntity(CandidateResponseDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        return Candidate.builder()
+                .id(dto.getId())
+                .cvDocumentId(dto.getCvDocumentId())
+                .fullName(dto.getFullName())
+                .email(dto.getEmail())
+                .phoneNumber(dto.getPhoneNumber())
+                .age(dto.getAge())
+                .build();
+    }
+}
+
+
+
+
+
+package com.yourcompany.ats.evaluation.mapper;
+
+import com.yourcompany.ats.evaluation.dto.ExtractionResultDTO;
+import com.yourcompany.ats.evaluation.model.JobExtractionResult;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ExtractionMapper {
+
+    public ExtractionResultDTO toDto(JobExtractionResult entity) {
+        if (entity == null) {
+            return null;
+        }
+        return ExtractionResultDTO.builder()
+                .id(entity.getId())
+                .jobOpeningId(entity.getJobOpeningId())
+                .candidateId(entity.getCandidateId())
+                .extractedAt(entity.getExtractedAt())
+                .skills(entity.getSkills())
+                .experienceEntries(entity.getExperienceEntries())
+                .education(entity.getEducation())
+                .certifications(entity.getCertifications())
+                .gradYear(entity.getGradYear())
+                .totalYearsExperience(entity.getTotalYearsExperience())
+                .relevantYearsExperience(entity.getRelevantYearsExperience())
+                .build();
+    }
+
+    public JobExtractionResult toEntity(ExtractionResultDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        return JobExtractionResult.builder()
+                .id(dto.getId())
+                .jobOpeningId(dto.getJobOpeningId())
+                .candidateId(dto.getCandidateId())
+                .extractedAt(dto.getExtractedAt())
+                .skills(dto.getSkills())
+                .experienceEntries(dto.getExperienceEntries())
+                .education(dto.getEducation())
+                .certifications(dto.getCertifications())
+                .gradYear(dto.getGradYear())
+                .totalYearsExperience(dto.getTotalYearsExperience())
+                .relevantYearsExperience(dto.getRelevantYearsExperience())
+                .build();
+    }
+}
+
+
+
+
+package com.yourcompany.ats.evaluation.mapper;
+
+import com.yourcompany.ats.evaluation.dto.ScoreResultDTO;
+import com.yourcompany.ats.evaluation.model.ScoreResult;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ScoreMapper {
+
+    public ScoreResultDTO toDto(ScoreResult entity) {
+        if (entity == null) {
+            return null;
+        }
+        return ScoreResultDTO.builder()
+                .id(entity.getId())
+                .jobOpeningId(entity.getJobOpeningId())
+                .candidateId(entity.getCandidateId())
+                .score(entity.getScore())
+                .matchedItems(entity.getMatchedItems())
+                .missingItems(entity.getMissingItems())
+                .totalExperienceYears(entity.getTotalExperienceYears())
+                .relevantExperienceYears(entity.getRelevantExperienceYears())
+                .computedAt(entity.getComputedAt())
+                .build();
+    }
+
+    public ScoreResult toEntity(ScoreResultDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        return ScoreResult.builder()
+                .id(dto.getId())
+                .jobOpeningId(dto.getJobOpeningId())
+                .candidateId(dto.getCandidateId())
+                .score(dto.getScore())
+                .matchedItems(dto.getMatchedItems())
+                .missingItems(dto.getMissingItems())
+                .totalExperienceYears(dto.getTotalExperienceYears())
+                .relevantExperienceYears(dto.getRelevantExperienceYears())
+                .computedAt(dto.getComputedAt())
+                .build();
+    }
+}
+
