@@ -1,0 +1,34 @@
+package com.yourcompany.ats.evaluation.controller;
+
+import com.yourcompany.ats.evaluation.dto.CandidateProfileDTO;
+import com.yourcompany.ats.evaluation.dto.CandidateResponseDTO;
+import com.yourcompany.ats.evaluation.service.CandidateService;
+import com.yourcompany.ats.evaluation.service.EvaluationOrchestrator;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/candidates")
+@RequiredArgsConstructor
+public class CandidateController {
+
+    private final CandidateService candidateService;
+    private final EvaluationOrchestrator evaluationOrchestrator;
+
+    @GetMapping("/{id}")
+    public ResponseEntity<CandidateResponseDTO> getById(@PathVariable String id) {
+        return ResponseEntity.ok(candidateService.getById(id));
+    }
+
+    /**
+     * The combined view: candidate + extraction + score for a specific job.
+     * e.g. GET /api/candidates/{candidateId}/profile?jobOpeningId=xyz
+     */
+    @GetMapping("/{candidateId}/profile")
+    public ResponseEntity<CandidateProfileDTO> getProfile(
+            @PathVariable String candidateId,
+            @RequestParam String jobOpeningId) {
+        return ResponseEntity.ok(evaluationOrchestrator.getProfile(jobOpeningId, candidateId));
+    }
+}
