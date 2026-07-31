@@ -1,0 +1,35 @@
+package com.yourcompany.ats.evaluation.controller;
+
+import com.yourcompany.ats.evaluation.dto.ScoreResultDTO;
+import com.yourcompany.ats.evaluation.service.ScoreService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/jobs/{jobOpeningId}/scores")
+@RequiredArgsConstructor
+public class ScoreController {
+
+    private final ScoreService scoreService;
+
+    /**
+     * Ranked shortlist view for a job - highest match score first.
+     * GET /api/jobs/{jobOpeningId}/scores
+     */
+    @GetMapping
+    public ResponseEntity<List<ScoreResultDTO>> getRankedCandidates(@PathVariable String jobOpeningId) {
+        return ResponseEntity.ok(scoreService.getRankedCandidatesForJob(jobOpeningId));
+    }
+
+    @GetMapping("/{candidateId}")
+    public ResponseEntity<ScoreResultDTO> getScoreForCandidate(
+            @PathVariable String jobOpeningId,
+            @PathVariable String candidateId) {
+        return scoreService.findByJobAndCandidate(jobOpeningId, candidateId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+}
