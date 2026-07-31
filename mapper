@@ -1,0 +1,118 @@
+package com.yourcompany.ats.job.builder;
+
+import com.yourcompany.ats.evaluation.service.JobRequirementsView;
+import com.yourcompany.ats.job.model.JobRequirement;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Builds a JobRequirement one attribute-row at a time, mirroring how the
+ * wizard's second page works (recruiter adds a skill + weight, adds a
+ * certification + weight, etc., one row at a time before saving).
+ *
+ * Also produces the JobRequirementsView the ScoringEngine needs - this is
+ * the one place that translates "job module's requirement shape" into
+ * "evaluation module's scoring input shape", so ScoringEngine never has
+ * to know about JobRequirement directly.
+ */
+public class JobRequirementBuilder {
+
+    private final String jobOpeningId;
+    private final List<String> mandatorySkills = new ArrayList<>();
+    private final List<String> preferredSkills = new ArrayList<>();
+    private final List<String> certifications = new ArrayList<>();
+    private final Map<String, Double> weights = new HashMap<>();
+    private Integer minExperienceYears = 0;
+    private String educationLevel;
+    private String location;
+    private List<String> languages = new ArrayList<>();
+
+    private JobRequirementBuilder(String jobOpeningId) {
+        this.jobOpeningId = jobOpeningId;
+    }
+
+    public static JobRequirementBuilder forJob(String jobOpeningId) {
+        return new JobRequirementBuilder(jobOpeningId);
+    }
+
+    public JobRequirementBuilder addMandatorySkill(String name, double weight) {
+        mandatorySkills.add(name);
+        weights.put("mandatory_skill:" + name, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder addPreferredSkill(String name, double weight) {
+        preferredSkills.add(name);
+        weights.put("preferred_skill:" + name, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder addCertification(String name, double weight) {
+        certifications.add(name);
+        weights.put("certification:" + name, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder withExperience(int minYears, double weight) {
+        this.minExperienceYears = minYears;
+        weights.put("min_experience", weight);
+        return this;
+    }
+
+    public JobRequirementBuilder withEducation(String level, double weight) {
+        this.educationLevel = level;
+        weights.put("education", weight);
+        return this;
+    }
+
+    public JobRequirementBuilder withLocation(String location) {
+        this.location = location;
+        return this;
+    }
+
+    public JobRequirementBuilder withLanguages(List<String> languages) {
+        this.languages = languages == null ? new ArrayList<>() : languages;
+        return this;
+    }
+
+    public JobRequirement build() {
+        return JobRequirement.builder()
+                .id(UUID.randomUUID().toString())
+                .jobOpeningId(jobOpeningId)
+                .skillsMandatory(mandatorySkills)
+                .skillsPreferred(preferredSkills)
+                .certifications(certifications)
+                .minExperienceYears(minExperienceYears)
+                .educationLevel(educationLevel)
+                .location(location)
+                .languages(languages)
+                .weights(weights)
+                .build();
+    }
+
+    /**
+     * Confirms the requirements - stamps confirmed_at. Called once the
+     * recruiter is done adding rows and clicks "confirm" on page 2.
+     */
+    public static JobRequirement confirm(JobRequirement requirement) {
+        requirement.setConfirmedAt(LocalDateTime.now());
+        return requirement;
+    }
+
+    /**
+     * Converts a persisted JobRequirement into the read-only projection
+     * the ScoringEngine consumes.
+     */
+    public static JobRequirementsView toRequirementsView(JobRequirement requirement) {
+        return JobRequirementsView.builder()
+                .mandatorySkills(requirement.getSkillsMandatory())
+                .preferredSkills(requirement.getSkillsPreferred())
+                .minExperienceYears(requirement.getMinExperienceYears() == null ? 0 : requirement.getMinExperienceYears())
+                .build();
+    }
+}
