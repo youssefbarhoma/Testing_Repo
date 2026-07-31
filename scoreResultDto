@@ -1,0 +1,27 @@
+package com.yourcompany.ats.evaluation.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ScoreResultDTO {
+    private String id;
+    private String jobOpeningId;
+    private String candidateId;
+    private BigDecimal score;
+    private List<Map<String, Object>> matchedItems;
+    private List<Map<String, Object>> missingItems;
+    private Integer totalExperienceYears;
+    private Integer relevantExperienceYears;
+    private LocalDateTime computedAt;
+}
