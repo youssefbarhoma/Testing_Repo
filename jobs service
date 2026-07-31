@@ -1,0 +1,280 @@
+package com.yourcompany.ats.job.service;
+
+import com.yourcompany.ats.job.dto.JobOpeningRequestDTO;
+import com.yourcompany.ats.job.dto.JobOpeningResponseDTO;
+import com.yourcompany.ats.job.model.JobStatus;
+
+import java.util.List;
+
+public interface JobOpeningService {
+
+    JobOpeningResponseDTO create(JobOpeningRequestDTO dto);
+
+    JobOpeningResponseDTO update(String id, JobOpeningRequestDTO dto);
+
+    void delete(String id);
+
+    JobOpeningResponseDTO getById(String id);
+
+    List<JobOpeningResponseDTO> listAll();
+
+    List<JobOpeningResponseDTO> listByStatus(JobStatus status);
+
+    JobOpeningResponseDTO updateStatus(String id, JobStatus status);
+}
+
+
+
+package com.yourcompany.ats.job.service;
+
+import com.yourcompany.ats.common.exception.ResourceNotFoundException;
+import com.yourcompany.ats.job.dto.JobOpeningRequestDTO;
+import com.yourcompany.ats.job.dto.JobOpeningResponseDTO;
+import com.yourcompany.ats.job.mapper.JobOpeningMapper;
+import com.yourcompany.ats.job.model.JobOpening;
+import com.yourcompany.ats.job.model.JobStatus;
+import com.yourcompany.ats.job.repository.JobOpeningRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class JobOpeningServiceImpl implements JobOpeningService {
+
+    private final JobOpeningRepository jobOpeningRepository;
+    private final JobOpeningMapper jobOpeningMapper;
+
+    @Override
+    public JobOpeningResponseDTO create(JobOpeningRequestDTO dto) {
+        JobOpening jobOpening = JobOpening.builder()
+                .id(UUID.randomUUID().toString())
+                .title(dto.getTitle())
+                .jdText(dto.getJdText())
+                .status(JobStatus.DRAFT) // page 1 saved -> DRAFT, requirements come next
+                .createdBy(dto.getCreatedBy())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        JobOpening saved = jobOpeningRepository.save(jobOpening);
+        return jobOpeningMapper.toDto(saved);
+    }
+
+    @Override
+    public JobOpeningResponseDTO update(String id, JobOpeningRequestDTO dto) {
+        JobOpening existing = jobOpeningRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobOpening", id));
+
+        existing.setTitle(dto.getTitle());
+        existing.setJdText(dto.getJdText());
+        // createdBy/createdAt/status are not touched by a plain edit of title+description
+
+        JobOpening saved = jobOpeningRepository.save(existing);
+        return jobOpeningMapper.toDto(saved);
+    }
+
+    @Override
+    public void delete(String id) {
+        if (!jobOpeningRepository.existsById(id)) {
+            throw ResourceNotFoundException.of("JobOpening", id);
+        }
+        // job_requirements, cv_batches, shortlists etc. cascade via FK ON DELETE CASCADE
+        jobOpeningRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JobOpeningResponseDTO getById(String id) {
+        JobOpening jobOpening = jobOpeningRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobOpening", id));
+        return jobOpeningMapper.toDto(jobOpening);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<JobOpeningResponseDTO> listAll() {
+        return jobOpeningRepository.findAll().stream()
+                .map(jobOpeningMapper::toDto)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<JobOpeningResponseDTO> listByStatus(JobStatus status) {
+        return jobOpeningRepository.findByStatus(status).stream()
+                .map(jobOpeningMapper::toDto)
+                .toList();
+    }
+
+    @Override
+    public JobOpeningResponseDTO updateStatus(String id, JobStatus status) {
+        JobOpening jobOpening = jobOpeningRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobOpening", id));
+        jobOpening.setStatus(status);
+        return jobOpeningMapper.toDto(jobOpeningRepository.save(jobOpening));
+    }
+}
+
+package com.yourcompany.ats.job.service;
+
+import com.yourcompany.ats.evaluation.service.JobRequirementsView;
+import com.yourcompany.ats.job.dto.JobRequirementDTO;
+
+public interface JobRequirementService {
+
+    JobRequirementDTO create(String jobOpeningId, JobRequirementDTO dto);
+
+    JobRequirementDTO update(String jobOpeningId, JobRequirementDTO dto);
+
+    void delete(String jobOpeningId);
+
+    JobRequirementDTO getByJobOpeningId(String jobOpeningId);
+
+    // Locks in the requirements, stamps confirmed_at, flips the job to READY
+    JobRequirementDTO confirm(String jobOpeningId);
+
+    // What the ScoringEngine (evaluation module) actually needs
+    JobRequirementsView getRequirementsView(String jobOpeningId);
+}
+
+
+
+package com.yourcompany.ats.job.service;
+
+import com.yourcompany.ats.common.exception.ResourceNotFoundException;
+import com.yourcompany.ats.evaluation.service.JobRequirementsView;
+import com.yourcompany.ats.job.builder.JobRequirementBuilder;
+import com.yourcompany.ats.job.dto.JobRequirementDTO;
+import com.yourcompany.ats.job.mapper.JobRequirementMapper;
+import com.yourcompany.ats.job.model.JobOpening;
+import com.yourcompany.ats.job.model.JobRequirement;
+import com.yourcompany.ats.job.model.JobStatus;
+import com.yourcompany.ats.job.repository.JobOpeningRepository;
+import com.yourcompany.ats.job.repository.JobRequirementRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class JobRequirementServiceImpl implements JobRequirementService {
+
+    private final JobRequirementRepository jobRequirementRepository;
+    private final JobOpeningRepository jobOpeningRepository;
+    private final JobRequirementMapper jobRequirementMapper;
+
+    @Override
+    public JobRequirementDTO create(String jobOpeningId, JobRequirementDTO dto) {
+        assertJobOpeningExists(jobOpeningId);
+        if (jobRequirementRepository.existsByJobOpeningId(jobOpeningId)) {
+            throw new IllegalStateException("Requirements already exist for job opening " + jobOpeningId
+                    + " - use update instead");
+        }
+
+        JobRequirement requirement = fromWizardRows(jobOpeningId, dto);
+        JobRequirement saved = jobRequirementRepository.save(requirement);
+        return jobRequirementMapper.toDto(saved);
+    }
+
+    @Override
+    public JobRequirementDTO update(String jobOpeningId, JobRequirementDTO dto) {
+        JobRequirement existing = jobRequirementRepository.findByJobOpeningId(jobOpeningId)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobRequirement for job", jobOpeningId));
+
+        JobRequirement rebuilt = fromWizardRows(jobOpeningId, dto);
+        rebuilt.setId(existing.getId()); // keep the same row, replace its contents
+        rebuilt.setConfirmedAt(existing.getConfirmedAt()); // editing does not silently re-confirm
+
+        JobRequirement saved = jobRequirementRepository.save(rebuilt);
+        return jobRequirementMapper.toDto(saved);
+    }
+
+    @Override
+    public void delete(String jobOpeningId) {
+        if (!jobRequirementRepository.existsByJobOpeningId(jobOpeningId)) {
+            throw ResourceNotFoundException.of("JobRequirement for job", jobOpeningId);
+        }
+        jobRequirementRepository.deleteByJobOpeningId(jobOpeningId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JobRequirementDTO getByJobOpeningId(String jobOpeningId) {
+        JobRequirement requirement = jobRequirementRepository.findByJobOpeningId(jobOpeningId)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobRequirement for job", jobOpeningId));
+        return jobRequirementMapper.toDto(requirement);
+    }
+
+    @Override
+    public JobRequirementDTO confirm(String jobOpeningId) {
+        JobRequirement requirement = jobRequirementRepository.findByJobOpeningId(jobOpeningId)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobRequirement for job", jobOpeningId));
+
+        JobRequirement confirmed = JobRequirementBuilder.confirm(requirement);
+        JobRequirement saved = jobRequirementRepository.save(confirmed);
+
+        JobOpening jobOpening = jobOpeningRepository.findById(jobOpeningId)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobOpening", jobOpeningId));
+        jobOpening.setStatus(JobStatus.READY);
+        jobOpeningRepository.save(jobOpening);
+
+        return jobRequirementMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public JobRequirementsView getRequirementsView(String jobOpeningId) {
+        JobRequirement requirement = jobRequirementRepository.findByJobOpeningId(jobOpeningId)
+                .orElseThrow(() -> ResourceNotFoundException.of("JobRequirement for job", jobOpeningId));
+        return JobRequirementBuilder.toRequirementsView(requirement);
+    }
+
+    private void assertJobOpeningExists(String jobOpeningId) {
+        if (!jobOpeningRepository.existsById(jobOpeningId)) {
+            throw ResourceNotFoundException.of("JobOpening", jobOpeningId);
+        }
+    }
+
+    /**
+     * Replays the DTO's weighted rows through the builder rather than
+     * jobRequirementMapper.toEntity(dto) directly, so create/update always
+     * go through the same one-row-at-a-time construction path as the wizard -
+     * keeps the weights-map key convention centralized in one place.
+     */
+    private JobRequirement fromWizardRows(String jobOpeningId, JobRequirementDTO dto) {
+        JobRequirementBuilder builder = JobRequirementBuilder.forJob(jobOpeningId);
+
+        if (dto.getMandatorySkills() != null) {
+            dto.getMandatorySkills().forEach(item ->
+                    builder.addMandatorySkill(item.getName(), weightOrZero(item.getWeight())));
+        }
+        if (dto.getPreferredSkills() != null) {
+            dto.getPreferredSkills().forEach(item ->
+                    builder.addPreferredSkill(item.getName(), weightOrZero(item.getWeight())));
+        }
+        if (dto.getCertifications() != null) {
+            dto.getCertifications().forEach(item ->
+                    builder.addCertification(item.getName(), weightOrZero(item.getWeight())));
+        }
+        if (dto.getMinExperienceYears() != null) {
+            builder.withExperience(dto.getMinExperienceYears(), weightOrZero(dto.getExperienceWeight()));
+        }
+        if (dto.getEducationLevel() != null) {
+            builder.withEducation(dto.getEducationLevel(), weightOrZero(dto.getEducationWeight()));
+        }
+        builder.withLocation(dto.getLocation());
+        builder.withLanguages(dto.getLanguages());
+
+        return builder.build();
+    }
+
+    private double weightOrZero(Double weight) {
+        return weight == null ? 0.0 : weight;
+    }
+}
