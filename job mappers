@@ -1,0 +1,144 @@
+package com.yourcompany.ats.job.mapper;
+
+import com.yourcompany.ats.job.dto.JobOpeningResponseDTO;
+import com.yourcompany.ats.job.model.JobOpening;
+import org.springframework.stereotype.Component;
+
+@Component
+public class JobOpeningMapper {
+
+    public JobOpeningResponseDTO toDto(JobOpening entity) {
+        if (entity == null) {
+            return null;
+        }
+        return JobOpeningResponseDTO.builder()
+                .id(entity.getId())
+                .title(entity.getTitle())
+                .jdText(entity.getJdText())
+                .status(entity.getStatus())
+                .createdBy(entity.getCreatedBy())
+                .createdAt(entity.getCreatedAt())
+                .build();
+    }
+}
+
+
+
+
+package com.yourcompany.ats.job.mapper;
+
+import com.yourcompany.ats.job.dto.JobRequirementDTO;
+import com.yourcompany.ats.job.dto.WeightedItemDTO;
+import com.yourcompany.ats.job.model.JobRequirement;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * The entity stores skills/certifications as flat text[] arrays plus a single
+ * weights JSONB map (since that's how Postgres stores them). The DTO shows
+ * the recruiter each attribute paired with its weight as one row. This mapper
+ * is where that flattening/unflattening happens - key prefixes below are the
+ * only place that convention needs to be known.
+ */
+@Component
+public class JobRequirementMapper {
+
+    private static final String MANDATORY_SKILL_PREFIX = "mandatory_skill:";
+    private static final String PREFERRED_SKILL_PREFIX = "preferred_skill:";
+    private static final String CERTIFICATION_PREFIX = "certification:";
+    private static final String EXPERIENCE_KEY = "min_experience";
+    private static final String EDUCATION_KEY = "education";
+
+    public JobRequirementDTO toDto(JobRequirement entity) {
+        if (entity == null) {
+            return null;
+        }
+        Map<String, Double> weights = entity.getWeights() == null ? Map.of() : entity.getWeights();
+
+        return JobRequirementDTO.builder()
+                .id(entity.getId())
+                .jobOpeningId(entity.getJobOpeningId())
+                .mandatorySkills(toWeightedItems(entity.getSkillsMandatory(), weights, MANDATORY_SKILL_PREFIX))
+                .preferredSkills(toWeightedItems(entity.getSkillsPreferred(), weights, PREFERRED_SKILL_PREFIX))
+                .certifications(toWeightedItems(entity.getCertifications(), weights, CERTIFICATION_PREFIX))
+                .minExperienceYears(entity.getMinExperienceYears())
+                .experienceWeight(weights.get(EXPERIENCE_KEY))
+                .educationLevel(entity.getEducationLevel())
+                .educationWeight(weights.get(EDUCATION_KEY))
+                .location(entity.getLocation())
+                .languages(entity.getLanguages())
+                .confirmedAt(entity.getConfirmedAt())
+                .build();
+    }
+
+    /**
+     * Builds the entity's flat arrays + merged weights map from the DTO's
+     * per-row weighted items. Does not set id/jobOpeningId/confirmedAt -
+     * that's the service/builder's job, since this is a pure shape translation.
+     */
+    public JobRequirement toEntity(JobRequirementDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        Map<String, Double> weights = new HashMap<>();
+        mergeWeights(weights, dto.getMandatorySkills(), MANDATORY_SKILL_PREFIX);
+        mergeWeights(weights, dto.getPreferredSkills(), PREFERRED_SKILL_PREFIX);
+        mergeWeights(weights, dto.getCertifications(), CERTIFICATION_PREFIX);
+        if (dto.getExperienceWeight() != null) {
+            weights.put(EXPERIENCE_KEY, dto.getExperienceWeight());
+        }
+        if (dto.getEducationWeight() != null) {
+            weights.put(EDUCATION_KEY, dto.getEducationWeight());
+        }
+
+        return JobRequirement.builder()
+                .id(dto.getId())
+                .jobOpeningId(dto.getJobOpeningId())
+                .skillsMandatory(toNames(dto.getMandatorySkills()))
+                .skillsPreferred(toNames(dto.getPreferredSkills()))
+                .certifications(toNames(dto.getCertifications()))
+                .minExperienceYears(dto.getMinExperienceYears())
+                .educationLevel(dto.getEducationLevel())
+                .location(dto.getLocation())
+                .languages(dto.getLanguages())
+                .weights(weights)
+                .confirmedAt(dto.getConfirmedAt())
+                .build();
+    }
+
+    private List<WeightedItemDTO> toWeightedItems(List<String> names, Map<String, Double> weights, String prefix) {
+        if (names == null) {
+            return List.of();
+        }
+        List<WeightedItemDTO> items = new ArrayList<>();
+        for (String name : names) {
+            items.add(WeightedItemDTO.builder()
+                    .name(name)
+                    .weight(weights.get(prefix + name))
+                    .build());
+        }
+        return items;
+    }
+
+    private List<String> toNames(List<WeightedItemDTO> items) {
+        if (items == null) {
+            return List.of();
+        }
+        return items.stream().map(WeightedItemDTO::getName).toList();
+    }
+
+    private void mergeWeights(Map<String, Double> target, List<WeightedItemDTO> items, String prefix) {
+        if (items == null) {
+            return;
+        }
+        for (WeightedItemDTO item : items) {
+            if (item.getWeight() != null) {
+                target.put(prefix + item.getName(), item.getWeight());
+            }
+        }
+    }
+}
