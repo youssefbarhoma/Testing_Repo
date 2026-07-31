@@ -1,0 +1,53 @@
+package com.yourcompany.ats.evaluation.repository;
+
+import com.yourcompany.ats.evaluation.model.Candidate;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface CandidateRepository extends JpaRepository<Candidate, String> {
+
+    Optional<Candidate> findByCvDocumentId(String cvDocumentId);
+
+    Optional<Candidate> findByEmail(String email);
+}
+
+package com.yourcompany.ats.evaluation.repository;
+
+import com.yourcompany.ats.evaluation.model.JobExtractionResult;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface ExtractionRepository extends JpaRepository<JobExtractionResult, String> {
+
+    // One extraction per (job, candidate) pair - a candidate can apply to multiple jobs
+    Optional<JobExtractionResult> findByJobOpeningIdAndCandidateId(String jobOpeningId, String candidateId);
+
+    List<JobExtractionResult> findByJobOpeningId(String jobOpeningId);
+
+    List<JobExtractionResult> findByCandidateId(String candidateId);
+}
+
+
+
+package com.yourcompany.ats.evaluation.repository;
+
+import com.yourcompany.ats.evaluation.model.ScoreResult;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface ScoreRepository extends JpaRepository<ScoreResult, String> {
+
+    Optional<ScoreResult> findByJobOpeningIdAndCandidateId(String jobOpeningId, String candidateId);
+
+    // For a shortlist/ranking view: all scored candidates for a job, best first
+    List<ScoreResult> findByJobOpeningIdOrderByScoreDesc(String jobOpeningId);
+
+    List<ScoreResult> findByCandidateId(String candidateId);
+}
+
+
