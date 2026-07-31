@@ -1,0 +1,32 @@
+package com.yourcompany.ats.job.repository;
+
+import com.yourcompany.ats.job.model.JobRequirement;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface JobRequirementRepository extends JpaRepository<JobRequirement, String> {
+
+    // 1:1 with job_openings - this is the primary lookup used everywhere
+    Optional<JobRequirement> findByJobOpeningId(String jobOpeningId);
+
+    void deleteByJobOpeningId(String jobOpeningId);
+
+    boolean existsByJobOpeningId(String jobOpeningId);
+}
+
+
+package com.yourcompany.ats.job.repository;
+
+import com.yourcompany.ats.job.model.JobOpening;
+import com.yourcompany.ats.job.model.JobStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface JobOpeningRepository extends JpaRepository<JobOpening, String> {
+
+    List<JobOpening> findByStatus(JobStatus status);
+
+    List<JobOpening> findByCreatedBy(String createdBy);
+}
