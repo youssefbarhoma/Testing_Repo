@@ -1,0 +1,114 @@
+package com.yourcompany.ats.job.model;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "job_openings")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class JobOpening {
+
+    @Id
+    @Column(name = "id", length = 36)
+    private String id;
+
+    @Column(name = "title", nullable = false)
+    private String title;
+
+    @Column(name = "jd_text", nullable = false, columnDefinition = "TEXT")
+    private String jdText;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 50)
+    private JobStatus status;
+
+    @Column(name = "created_by", length = 36, nullable = false)
+    private String createdBy;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+}
+
+
+
+
+package com.yourcompany.ats.job.model;
+
+import com.yourcompany.ats.common.converter.WeightsJsonConverter;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Entity
+@Table(name = "job_requirements")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class JobRequirement {
+
+    @Id
+    @Column(name = "id", length = 36)
+    private String id;
+
+    // 1:1 with job_openings
+    @Column(name = "job_opening_id", length = 36, unique = true, nullable = false)
+    private String jobOpeningId;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "skills_mandatory", columnDefinition = "text[]", nullable = false)
+    private List<String> skillsMandatory;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "skills_preferred", columnDefinition = "text[]")
+    private List<String> skillsPreferred;
+
+    @Column(name = "min_experience_years", nullable = false)
+    private Integer minExperienceYears;
+
+    @Column(name = "education_level")
+    private String educationLevel;
+
+    @Column(name = "location")
+    private String location;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "languages", columnDefinition = "text[]")
+    private List<String> languages;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "certifications", columnDefinition = "text[]")
+    private List<String> certifications;
+
+    // dynamic relative weight per attribute, e.g. {"skill:java": 10.0, "min_experience": 20.0}
+    @Convert(converter = WeightsJsonConverter.class)
+    @Column(name = "weights", columnDefinition = "jsonb")
+    private Map<String, Double> weights;
+
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
+}
+
+
+
+
+package com.yourcompany.ats.job.model;
+
+public enum JobStatus {
+    DRAFT,       // page 1 done: title + description saved
+    READY,       // page 2 done: requirements confirmed, ready to receive CVs
+    SCREENING,   // CV batches are being processed/scored against this job
+    CLOSED
+}
