@@ -1,0 +1,115 @@
+package com.yourcompany.ats.job.controller;
+
+import com.yourcompany.ats.job.dto.JobOpeningRequestDTO;
+import com.yourcompany.ats.job.dto.JobOpeningResponseDTO;
+import com.yourcompany.ats.job.model.JobStatus;
+import com.yourcompany.ats.job.service.JobOpeningService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/jobs")
+@RequiredArgsConstructor
+public class JobOpeningController {
+
+    private final JobOpeningService jobOpeningService;
+
+    // Page 1 of the wizard: title + description
+    @PostMapping
+    public ResponseEntity<JobOpeningResponseDTO> create(@Valid @RequestBody JobOpeningRequestDTO dto) {
+        JobOpeningResponseDTO created = jobOpeningService.create(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<JobOpeningResponseDTO> getById(@PathVariable String id) {
+        return ResponseEntity.ok(jobOpeningService.getById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<JobOpeningResponseDTO>> list(
+            @RequestParam(required = false) JobStatus status) {
+        List<JobOpeningResponseDTO> results = status == null
+                ? jobOpeningService.listAll()
+                : jobOpeningService.listByStatus(status);
+        return ResponseEntity.ok(results);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<JobOpeningResponseDTO> update(
+            @PathVariable String id,
+            @Valid @RequestBody JobOpeningRequestDTO dto) {
+        return ResponseEntity.ok(jobOpeningService.update(id, dto));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<JobOpeningResponseDTO> updateStatus(
+            @PathVariable String id,
+            @RequestParam JobStatus status) {
+        return ResponseEntity.ok(jobOpeningService.updateStatus(id, status));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+        jobOpeningService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+}
+
+
+
+
+package com.yourcompany.ats.job.controller;
+
+import com.yourcompany.ats.job.dto.JobRequirementDTO;
+import com.yourcompany.ats.job.service.JobRequirementService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/jobs/{jobOpeningId}/requirements")
+@RequiredArgsConstructor
+public class JobRequirementController {
+
+    private final JobRequirementService jobRequirementService;
+
+    // Page 2 of the wizard: recruiter adds skills/certifications/experience rows, each with a weight
+    @PostMapping
+    public ResponseEntity<JobRequirementDTO> create(
+            @PathVariable String jobOpeningId,
+            @RequestBody JobRequirementDTO dto) {
+        JobRequirementDTO created = jobRequirementService.create(jobOpeningId, dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @GetMapping
+    public ResponseEntity<JobRequirementDTO> get(@PathVariable String jobOpeningId) {
+        return ResponseEntity.ok(jobRequirementService.getByJobOpeningId(jobOpeningId));
+    }
+
+    @PutMapping
+    public ResponseEntity<JobRequirementDTO> update(
+            @PathVariable String jobOpeningId,
+            @RequestBody JobRequirementDTO dto) {
+        return ResponseEntity.ok(jobRequirementService.update(jobOpeningId, dto));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> delete(@PathVariable String jobOpeningId) {
+        jobRequirementService.delete(jobOpeningId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Recruiter clicks "confirm" at the end of page 2: locks requirements, job -> READY
+    @PostMapping("/confirm")
+    public ResponseEntity<JobRequirementDTO> confirm(@PathVariable String jobOpeningId) {
+        return ResponseEntity.ok(jobRequirementService.confirm(jobOpeningId));
+    }
+}
