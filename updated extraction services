@@ -1,0 +1,325 @@
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.dto.CandidateResponseDTO;
+
+public interface CandidateService {
+
+    CandidateResponseDTO getById(String id);
+
+    CandidateResponseDTO getByCvDocumentId(String cvDocumentId);
+
+    CandidateResponseDTO create(CandidateResponseDTO dto);
+}
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.common.exception.ResourceNotFoundException;
+import com.example.T4.application.evaluation.dto.CandidateResponseDTO;
+import com.example.T4.application.evaluation.mapper.CandidateMapper;
+import com.example.T4.application.evaluation.model.Candidate;
+import com.example.T4.application.evaluation.repository.CandidateRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class CandidateServiceImpl implements CandidateService {
+
+    private final CandidateRepository candidateRepository;
+    private final CandidateMapper candidateMapper;
+
+    @Override
+    @Transactional(readOnly = true)
+    public CandidateResponseDTO getById(String id) {
+        Candidate candidate = candidateRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Candidate", id));
+        return candidateMapper.toDto(candidate);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CandidateResponseDTO getByCvDocumentId(String cvDocumentId) {
+        Candidate candidate = candidateRepository.findByCvDocumentId(cvDocumentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Candidate for cv_document", cvDocumentId));
+        return candidateMapper.toDto(candidate);
+    }
+
+    @Override
+    public CandidateResponseDTO create(CandidateResponseDTO dto) {
+        Candidate candidate = candidateMapper.toEntity(dto);
+        if (candidate.getId() == null) {
+            candidate.setId(UUID.randomUUID().toString());
+        }
+        Candidate saved = candidateRepository.save(candidate);
+        return candidateMapper.toDto(saved);
+    }
+}
+
+
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.builder.CandidateProfileBuilder;
+import com.example.T4.application.evaluation.dto.CandidateProfileDTO;
+import com.example.T4.application.evaluation.dto.CandidateResponseDTO;
+import com.example.T4.application.evaluation.dto.ExtractionResultDTO;
+import com.example.T4.application.evaluation.dto.ScoreResultDTO;
+import com.example.T4.application.evaluation.mapper.ExtractionMapper;
+import com.example.T4.application.evaluation.model.JobExtractionResult;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+/**
+ * The one place that knows the pipeline order: extract -> score -> assemble profile.
+ * Without this, the "extract then score" sequencing would live implicitly
+ * scattered across a controller or a batch job, which is exactly the kind
+ * of thing that gets duplicated and drifts out of sync.
+ */
+@Service
+@RequiredArgsConstructor
+public class EvaluationOrchestrator {
+
+    private final CandidateService candidateService;
+    private final ExtractionService extractionService;
+    private final ScoreService scoreService;
+    private final ExtractionMapper extractionMapper;
+
+    /**
+     * Called after a CV has been parsed by the AI pipeline (from the processing module).
+     * Persists the extraction, scores it against the job's requirements, and returns
+     * the finished profile in one shot.
+     */
+    public CandidateProfileDTO runEvaluation(String jobOpeningId, JobExtractionResult rawExtraction,
+                                              JobRequirementsView requirements) {
+        ExtractionResultDTO savedExtraction = extractionService.save(rawExtraction);
+
+        JobExtractionResult persistedEntity = extractionMapper.toEntity(savedExtraction);
+        ScoreResultDTO scoreResult = scoreService.computeAndSave(jobOpeningId, requirements, persistedEntity);
+
+        CandidateResponseDTO candidate = candidateService.getById(rawExtraction.getCandidateId());
+
+        return CandidateProfileBuilder.forCandidate(candidate)
+                .withExtraction(savedExtraction)
+                .withScore(scoreResult)
+                .build();
+    }
+
+    /**
+     * Read-only assembly for viewing an already-evaluated candidate
+     * (e.g. opening a shortlist entry) - no computation, just composition.
+     */
+    public CandidateProfileDTO getProfile(String jobOpeningId, String candidateId) {
+        CandidateResponseDTO candidate = candidateService.getById(candidateId);
+
+        ExtractionResultDTO extraction = extractionService
+                .findByJobAndCandidate(jobOpeningId, candidateId)
+                .orElse(null);
+
+        ScoreResultDTO score = scoreService
+                .findByJobAndCandidate(jobOpeningId, candidateId)
+                .orElse(null);
+
+        return CandidateProfileBuilder.forCandidate(candidate)
+                .withExtraction(extraction)
+                .withScore(score)
+                .build();
+    }
+}
+
+
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.dto.ExtractionResultDTO;
+import com.example.T4.application.evaluation.model.JobExtractionResult;
+
+import java.util.Optional;
+
+public interface ExtractionService {
+
+    Optional<ExtractionResultDTO> findByJobAndCandidate(String jobOpeningId, String candidateId);
+
+    ExtractionResultDTO save(JobExtractionResult extractionResult);
+}
+
+
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.dto.ExtractionResultDTO;
+import com.example.T4.application.evaluation.mapper.ExtractionMapper;
+import com.example.T4.application.evaluation.model.JobExtractionResult;
+import com.example.T4.application.evaluation.repository.ExtractionRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class ExtractionServiceImpl implements ExtractionService {
+
+    private final ExtractionRepository extractionRepository;
+    private final ExtractionMapper extractionMapper;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ExtractionResultDTO> findByJobAndCandidate(String jobOpeningId, String candidateId) {
+        return extractionRepository.findByJobOpeningIdAndCandidateId(jobOpeningId, candidateId)
+                .map(extractionMapper::toDto);
+    }
+
+    @Override
+    public ExtractionResultDTO save(JobExtractionResult extractionResult) {
+        JobExtractionResult saved = extractionRepository.save(extractionResult);
+        return extractionMapper.toDto(saved);
+    }
+}
+
+
+
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.dto.ScoreResultDTO;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface ScoreService {
+
+    Optional<ScoreResultDTO> findByJobAndCandidate(String jobOpeningId, String candidateId);
+
+    // Ranked list for a job's shortlist view - highest score first
+    List<ScoreResultDTO> getRankedCandidatesForJob(String jobOpeningId);
+
+    ScoreResultDTO computeAndSave(String jobOpeningId, JobRequirementsView requirements,
+                                  com.example.T4.application.evaluation.model.JobExtractionResult extraction);
+}
+
+
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.dto.ScoreResultDTO;
+import com.example.T4.application.evaluation.mapper.ScoreMapper;
+import com.example.T4.application.evaluation.model.JobExtractionResult;
+import com.example.T4.application.evaluation.model.ScoreResult;
+import com.example.T4.application.evaluation.repository.ScoreRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class ScoreServiceImpl implements ScoreService {
+
+    private final ScoreRepository scoreRepository;
+    private final ScoreMapper scoreMapper;
+    private final ScoringEngine scoringEngine;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ScoreResultDTO> findByJobAndCandidate(String jobOpeningId, String candidateId) {
+        return scoreRepository.findByJobOpeningIdAndCandidateId(jobOpeningId, candidateId)
+                .map(scoreMapper::toDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ScoreResultDTO> getRankedCandidatesForJob(String jobOpeningId) {
+        return scoreRepository.findByJobOpeningIdOrderByScoreDesc(jobOpeningId).stream()
+                .map(scoreMapper::toDto)
+                .toList();
+    }
+
+    @Override
+    public ScoreResultDTO computeAndSave(String jobOpeningId, JobRequirementsView requirements, JobExtractionResult extraction) {
+        ScoreResult computed = scoringEngine.score(jobOpeningId, requirements, extraction);
+        ScoreResult saved = scoreRepository.save(computed);
+        return scoreMapper.toDto(saved);
+    }
+}
+
+
+
+package com.example.T4.application.evaluation.service;
+
+import com.example.T4.application.evaluation.builder.ScoreResultBuilder;
+import com.example.T4.application.evaluation.model.JobExtractionResult;
+import com.example.T4.application.evaluation.model.ScoreResult;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Pure matching logic: takes what a job requires and what a candidate has,
+ * and produces a ScoreResult. Deliberately has no repository dependency -
+ * it's a calculator, not a persistence-aware service. ScoreService is what
+ * calls this and saves the result.
+ */
+@Component
+public class ScoringEngine {
+
+    private static final double MANDATORY_SKILL_WEIGHT = 10.0;
+    private static final double PREFERRED_SKILL_WEIGHT = 4.0;
+    private static final double EXPERIENCE_WEIGHT = 20.0;
+
+    public ScoreResult score(String jobOpeningId, JobRequirementsView requirements, JobExtractionResult extraction) {
+        ScoreResultBuilder builder = ScoreResultBuilder.forJobAndCandidate(jobOpeningId, extraction.getCandidateId());
+
+        Set<String> candidateSkills = normalize(extraction.getSkills());
+
+        scoreSkillGroup(builder, "MANDATORY_SKILL", requirements.getMandatorySkills(), candidateSkills, MANDATORY_SKILL_WEIGHT);
+        scoreSkillGroup(builder, "PREFERRED_SKILL", requirements.getPreferredSkills(), candidateSkills, PREFERRED_SKILL_WEIGHT);
+        scoreExperience(builder, requirements, extraction);
+
+        builder.withExperienceYears(
+                extraction.getTotalYearsExperience(),
+                extraction.getRelevantYearsExperience()
+        );
+
+        return builder.build();
+    }
+
+    private void scoreSkillGroup(ScoreResultBuilder builder, String type, List<String> required,
+                                  Set<String> candidateSkills, double weight) {
+        if (required == null) {
+            return;
+        }
+        for (String requiredSkill : required) {
+            if (candidateSkills.contains(requiredSkill.trim().toLowerCase())) {
+                builder.addMatch(type, requiredSkill, weight);
+            } else {
+                builder.addMissing(type, requiredSkill, weight);
+            }
+        }
+    }
+
+    private void scoreExperience(ScoreResultBuilder builder, JobRequirementsView requirements, JobExtractionResult extraction) {
+        int relevantYears = extraction.getRelevantYearsExperience() == null ? 0 : extraction.getRelevantYearsExperience();
+        if (relevantYears >= requirements.getMinExperienceYears()) {
+            builder.addMatch("MIN_EXPERIENCE", relevantYears + " years", EXPERIENCE_WEIGHT);
+        } else {
+            builder.addMissing("MIN_EXPERIENCE",
+                    "requires " + requirements.getMinExperienceYears() + " years, candidate has " + relevantYears,
+                    EXPERIENCE_WEIGHT);
+        }
+    }
+
+    private Set<String> normalize(List<String> skills) {
+        if (skills == null) {
+            return Set.of();
+        }
+        return skills.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(s -> s.trim().toLowerCase())
+                .collect(Collectors.toSet());
+    }
+}
