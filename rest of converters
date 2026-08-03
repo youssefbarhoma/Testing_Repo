@@ -1,0 +1,95 @@
+package com.example.T4.application.common.converter;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Converts a JSONB column holding an array of nested objects
+ * (e.g. experience_entries, education, certifications, matched_items, missing_items)
+ * into a List<Map<String, Object>> and back.
+ *
+ * Using Map<String,Object> instead of a rigid POJO keeps this converter reusable
+ * across every "array of loosely-structured blocks" JSONB column in the schema,
+ * since the AI parser's output shape can vary slightly between fields.
+ */
+@Converter
+public class MapListJsonConverter implements AttributeConverter<List<Map<String, Object>>, String> {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    public String convertToDatabaseColumn(List<Map<String, Object>> attribute) {
+        if (attribute == null) {
+            return null;
+        }
+        try {
+            return MAPPER.writeValueAsString(attribute);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unable to serialize map list to JSONB", e);
+        }
+    }
+
+    @Override
+    public List<Map<String, Object>> convertToEntityAttribute(String dbData) {
+        if (dbData == null || dbData.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return MAPPER.readValue(dbData, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unable to deserialize JSONB to map list", e);
+        }
+    }
+}
+
+
+package com.example.T4.application.common.converter;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
+
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Converts a JSONB column holding a flat array of strings
+ * (e.g. job_extraction_results.skills) into a List<String> and back.
+ */
+@Converter
+public class StringListJsonConverter implements AttributeConverter<List<String>, String> {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    public String convertToDatabaseColumn(List<String> attribute) {
+        if (attribute == null) {
+            return null;
+        }
+        try {
+            return MAPPER.writeValueAsString(attribute);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unable to serialize string list to JSONB", e);
+        }
+    }
+
+    @Override
+    public List<String> convertToEntityAttribute(String dbData) {
+        if (dbData == null || dbData.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return MAPPER.readValue(dbData, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unable to deserialize JSONB to string list", e);
+        }
+    }
+}
+
