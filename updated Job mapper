@@ -1,0 +1,180 @@
+package com.example.T4.application.job.mapper;
+
+import com.example.T4.application.job.builder.WeightKeys;
+import com.example.T4.application.job.dto.JobRequirementDTO;
+import com.example.T4.application.job.dto.WeightedItemDTO;
+import com.example.T4.application.job.model.JobRequirement;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@Component
+public class JobRequirementMapper {
+
+    public JobRequirementDTO toDto(JobRequirement entity) {
+        if (entity == null) {
+            return null;
+        }
+        Map<String, Double> weights = entity.getWeights() == null ? Map.of() : entity.getWeights();
+
+        return JobRequirementDTO.builder()
+                .id(entity.getId())
+                .jobOpeningId(entity.getJobOpeningId())
+                .mandatorySkills(toWeightedItems(entity.getSkillsMandatory(), weights, WeightKeys.MANDATORY_SKILL_PREFIX))
+                .preferredSkills(toWeightedItems(entity.getSkillsPreferred(), weights, WeightKeys.PREFERRED_SKILL_PREFIX))
+                .certifications(toWeightedItems(entity.getCertifications(), weights, WeightKeys.CERTIFICATION_PREFIX))
+                .minExperienceYears(entity.getMinExperienceYears())
+                .experienceWeight(weights.get(WeightKeys.EXPERIENCE_KEY))
+                .educationLevel(entity.getEducationLevel())
+                .educationWeight(weights.get(WeightKeys.EDUCATION_KEY))
+                .location(entity.getLocation())
+                .languages(entity.getLanguages())
+                .confirmedAt(entity.getConfirmedAt())
+                .build();
+    }
+
+    private List<WeightedItemDTO> toWeightedItems(List<String> names, Map<String, Double> weights, String prefix) {
+        if (names == null) {
+            return List.of();
+        }
+        List<WeightedItemDTO> items = new ArrayList<>();
+        for (String name : names) {
+            items.add(WeightedItemDTO.builder()
+                    .name(name)
+                    .weight(weights.get(prefix + name))
+                    .build());
+        }
+        return items;
+    }
+}
+
+
+
+
+package com.example.T4.application.job.builder;
+
+import com.example.T4.application.evaluation.service.JobRequirementsView;
+import com.example.T4.application.job.model.JobRequirement;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+
+public class JobRequirementBuilder {
+
+    private final String jobOpeningId;
+    private final List<String> mandatorySkills = new ArrayList<>();
+    private final List<String> preferredSkills = new ArrayList<>();
+    private final List<String> certifications = new ArrayList<>();
+    private final Map<String, Double> weights = new HashMap<>();
+    private Integer minExperienceYears = 0;
+    private String educationLevel;
+    private String location;
+    private List<String> languages = new ArrayList<>();
+
+    private JobRequirementBuilder(String jobOpeningId) {
+        this.jobOpeningId = jobOpeningId;
+    }
+
+    public static JobRequirementBuilder forJob(String jobOpeningId) {
+        return new JobRequirementBuilder(jobOpeningId);
+    }
+
+    public JobRequirementBuilder addMandatorySkill(String name, double weight) {
+        mandatorySkills.add(name);
+        weights.put(WeightKeys.MANDATORY_SKILL_PREFIX + name, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder addPreferredSkill(String name, double weight) {
+        preferredSkills.add(name);
+        weights.put(WeightKeys.PREFERRED_SKILL_PREFIX + name, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder addCertification(String name, double weight) {
+        certifications.add(name);
+        weights.put(WeightKeys.CERTIFICATION_PREFIX + name, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder withExperience(int minYears, double weight) {
+        this.minExperienceYears = minYears;
+        weights.put(WeightKeys.EXPERIENCE_KEY, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder withEducation(String level, double weight) {
+        this.educationLevel = level;
+        weights.put(WeightKeys.EDUCATION_KEY, weight);
+        return this;
+    }
+
+    public JobRequirementBuilder withLocation(String location) {
+        this.location = location;
+        return this;
+    }
+
+    public JobRequirementBuilder withLanguages(List<String> languages) {
+        this.languages = languages == null ? new ArrayList<>() : languages;
+        return this;
+    }
+
+    public JobRequirement build() {
+        return JobRequirement.builder()
+                .id(UUID.randomUUID().toString())
+                .jobOpeningId(jobOpeningId)
+                .skillsMandatory(mandatorySkills)
+                .skillsPreferred(preferredSkills)
+                .certifications(certifications)
+                .minExperienceYears(minExperienceYears)
+                .educationLevel(educationLevel)
+                .location(location)
+                .languages(languages)
+                .weights(weights)
+                .build();
+    }
+
+    public static JobRequirement confirm(JobRequirement requirement) {
+        requirement.setConfirmedAt(LocalDateTime.now());
+        return requirement;
+    }
+
+    public static JobRequirementsView toRequirementsView(JobRequirement requirement) {
+        return JobRequirementsView.builder()
+                .mandatorySkills(requirement.getSkillsMandatory())
+                .preferredSkills(requirement.getSkillsPreferred())
+                .minExperienceYears(requirement.getMinExperienceYears() == null ? 0 : requirement.getMinExperienceYears())
+                .build();
+    }
+}
+
+package com.example.T4.application.job.builder;
+
+/**
+ * The weights JSONB column is a flat Map<String, Double> keyed by strings
+ * like "mandatory_skill:Java". Both JobRequirementBuilder (which writes
+ * these keys) and JobRequirementMapper (which reads them back to rebuild
+ * the DTO's weighted rows) must agree on the exact prefix strings - so
+ * this is the one place that convention is spelled out. Change a prefix
+ * here and both sides stay in sync automatically.
+ */
+public final class WeightKeys {
+
+    public static final String MANDATORY_SKILL_PREFIX = "mandatory_skill:";
+    public static final String PREFERRED_SKILL_PREFIX = "preferred_skill:";
+    public static final String CERTIFICATION_PREFIX = "certification:";
+    public static final String EXPERIENCE_KEY = "min_experience";
+    public static final String EDUCATION_KEY = "education";
+
+    private WeightKeys() {
+        // constants holder - never instantiated
+    }
+}
+å
