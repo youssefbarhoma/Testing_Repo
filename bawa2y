@@ -1,0 +1,59 @@
+package com.example.T4.application.common.converter;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.AttributeConverter;
+import jakarta.persistence.Converter;
+
+import java.util.Collections;
+import java.util.Map;
+
+/**
+ * Converts the job_requirements.weights JSONB column (attribute name -> weight)
+ * into a Map<String, Double> and back. e.g. {"skill:java": 10.0, "min_experience": 20.0}
+ */
+@Converter
+public class WeightsJsonConverter implements AttributeConverter<Map<String, Double>, String> {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    public String convertToDatabaseColumn(Map<String, Double> attribute) {
+        if (attribute == null) {
+            return null;
+        }
+        try {
+            return MAPPER.writeValueAsString(attribute);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unable to serialize weights to JSONB", e);
+        }
+    }
+
+    @Override
+    public Map<String, Double> convertToEntityAttribute(String dbData) {
+        if (dbData == null || dbData.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return MAPPER.readValue(dbData, new TypeReference<Map<String, Double>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unable to deserialize JSONB to weights map", e);
+        }
+    }
+}
+
+
+
+
+package com.example.T4.application.common.exception;
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+
+    public static ResourceNotFoundException of(String entity, String id) {
+        return new ResourceNotFoundException(entity + " not found with id: " + id);
+    }
+}
+
