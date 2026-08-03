@@ -1,0 +1,20 @@
+package com.example.T4.application.evaluation.service;
+
+import lombok.Builder;
+import lombok.Getter;
+
+import java.util.List;
+
+/**
+ * A read-only projection of job_requirements, containing only what the
+ * ScoringEngine needs. Keeps the evaluation module from depending directly
+ * on the job module's internal entity - the JobRequirementService in the
+ * job module maps into this before calling the scoring engine.
+ */
+@Getter
+@Builder
+public class JobRequirementsView {
+    private List<String> mandatorySkills;
+    private List<String> preferredSkills;
+    private int minExperienceYears;
+}
